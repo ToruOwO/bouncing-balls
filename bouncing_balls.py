@@ -4,6 +4,9 @@ http://www.cs.utoronto.ca/~ilya/code/2008/RTRBM.tar
 """
 
 import argparse
+import glob
+import os
+import subprocess
 
 import _pickle as pickle
 import pdb
@@ -12,12 +15,14 @@ import matplotlib
 import scipy.io
 from numpy import *
 from scipy import *
+from PIL import Image
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 shape_std = shape
-
+r_list = None
+m_list = None
 
 def shape(A):
 	if isinstance(A, ndarray):
@@ -58,36 +63,34 @@ SIZE = 10
 
 # size of bounding box: SIZE X SIZE.
 
-def bounce_n(T=128, n=2, r=None, m=None):
-	if r is None:
-		r = [1.2] * n
-	if m is None:
-		m = [1] * n
-
-	# r is to be rather small.
+def bounce_n(T=128, n=2):
+	# X records (x,y) coordinates of n balls in T time steps
+	# r should be rather small
 	X = zeros((T, n, 2), dtype='float')
 	v = randn(n, 2)
 	v = v / norm(v) * .5
+
+	# generate initial configuration
 	good_config = False
 	while not good_config:
 		x = 2 + rand(n, 2) * 8
 		good_config = True
 		for i in range(n):
 			for z in range(2):
-				if x[i][z] - r[i] < 0:
+				if x[i][z] - r_list[i] < 0:
 					good_config = False
-				if x[i][z] + r[i] > SIZE:
+				if x[i][z] + r_list[i] > SIZE:
 					good_config = False
 
-		# that's the main part.
+		# check if any two balls overlap
 		for i in range(n):
 			for j in range(i):
-				if norm(x[i] - x[j]) < r[i] + r[j]:
+				if norm(x[i] - x[j]) < r_list[i] + r_list[j]:
 					good_config = False
 
 	eps = .5
 	for t in range(T):
-		# for how long do we show small simulation
+		# run simulation for T steps
 
 		for i in range(n):
 			X[t, i] = x[i]
@@ -99,12 +102,12 @@ def bounce_n(T=128, n=2, r=None, m=None):
 
 			for i in range(n):
 				for z in range(2):
-					if x[i][z] - r[i] < 0:  v[i][z] = abs(v[i][z])  # want positive
-					if x[i][z] + r[i] > SIZE: v[i][z] = -abs(v[i][z])  # want negative
+					if x[i][z] - r_list[i] < 0:  v[i][z] = abs(v[i][z])  # want positive
+					if x[i][z] + r_list[i] > SIZE: v[i][z] = -abs(v[i][z])  # want negative
 
 			for i in range(n):
 				for j in range(i):
-					if norm(x[i] - x[j]) < r[i] + r[j]:
+					if norm(x[i] - x[j]) < r_list[i] + r_list[j]:
 						# the bouncing off part:
 						w = x[i] - x[j]
 						w = w / norm(w)
@@ -112,7 +115,7 @@ def bounce_n(T=128, n=2, r=None, m=None):
 						v_i = dot(w.transpose(), v[i])
 						v_j = dot(w.transpose(), v[j])
 
-						new_v_i, new_v_j = new_speeds(m[i], m[j], v_i, v_j)
+						new_v_i, new_v_j = new_speeds(m_list[i], m_list[j], v_i, v_j)
 
 						v[i] += w * (new_v_i - v_i)
 						v[j] += w * (new_v_j - v_j)
@@ -124,10 +127,8 @@ def ar(x, y, z):
 	return z / 2 + arange(x, y, z, dtype='float')
 
 
-def matricize(X, res, r=None):
+def matricize(X, res):
 	T, n = shape(X)[0:2]
-	if r is None:
-		r = [1.2] * n
 
 	A = zeros((T, res, res), dtype='float')
 
@@ -136,62 +137,105 @@ def matricize(X, res, r=None):
 
 	for t in range(T):
 		for i in range(n):
-			A[t] += exp(-(((I - X[t, i, 0]) ** 2 + (J - X[t, i, 1]) ** 2) / (r[i] ** 2)) ** 4)
+			A[t] += exp(-(((I - X[t, i, 0]) ** 2 + (J - X[t, i, 1]) ** 2) / (r_list[i] ** 2)) ** 4)
 
 		A[t][A[t] > 1] = 1
 	return A
 
 
-def bounce_mat(res, n=2, T=128, r=None):
-	if r is None:
-		r = [1.2] * n
-	x = bounce_n(T, n, r);
-	A = matricize(x, res, r)
+def bounce_mat(res, n=2, T=128):
+	x = bounce_n(T, n);
+	A = matricize(x, res)
 	return A
 
 
-def bounce_vec(res, n=2, T=128, r=None, m=None):
-	if r is None:
-		r = [1.2] * n
-	x = bounce_n(T, n, r, m);
-	V = matricize(x, res, r)
+def bounce_vec(res, n=2, T=128):
+	x = bounce_n(T, n);
+	V = matricize(x, res)
 	return V.reshape(T, res ** 2)
 
 
-def show_sample(V, logdir):
+def show_sample(V, logdir, length=50, animate=True):
 	T = len(V)
 	res = int(sqrt(shape(V)[1]))
-	for t in range(T):
+
+	images = []
+
+	# save static frames as PNG images
+	for t in range(length):
 		plt.imshow(V[t].reshape(res, res), cmap=matplotlib.cm.Greys_r)
 		# Save it
 		fname = logdir + '/' + str(t) + '.png'
 		plt.savefig(fname)
+
+		images.append(Image.open(fname))
+
+	# generate GIF from the image files
+	gif_name = 'sample_l{}.gif'.format(length)
+	images[0].save(gif_name, format='GIF', append_images=images[1:], save_all=True, duration=100, loop=0)
+
+	# subprocess.run("ffmpeg -start_number 0 -i %d.png -c:v libx264 -pix_fmt yuv420p -r 30 sample.mp4")
 
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--data_name', type=str, default='bouncing_balls')
 	parser.add_argument('--log_dir', type=str, default='./sample')
+	parser.add_argument('--num_balls', type=int, default=3)
+	parser.add_argument('--radius', '-r', type=float, default=1.2, help='mean radius of bouncing balls')
+	parser.add_argument('--resolution', '-res', type=int, default=64, help='resolution')
+	parser.add_argument('-T', type=int, default=100, help='video sequence length')
+	parser.add_argument('-N', type=int, default=4000, help='number of data samples')
+	parser.add_argument('--test', type=int, default=4000, help='number of data samples')
+
 	args = parser.parse_args()
 
-	res = 30
-	T = 100
-	N = 4000
-	dat = empty((N), dtype=object)
-	for i in range(N):
-		dat[i] = bounce_vec(res=res, n=3, T=100)
-	data = {}
-	data['Data'] = dat
-	scipy.io.savemat('{}_training_data.mat'.format(args.data_name), data)
+	res = args.resolution
+	T = args.T
+	N = args.N
+	n = args.num_balls
 
-	N = 200
-	dat = empty((N), dtype=object)
-	for i in range(N):
-		dat[i] = bounce_vec(res=res, n=3, T=100)
-	data = {}
-	data['Data'] = dat
-	scipy.io.savemat('{}_testing_data.mat'.format(args.data_name), data)
+	# list of radii of all balls
+	# r_list = [args.radius] * n
+	r_list = [0.5, 1, 2]
 
-	# show one video
-	show_sample(dat[1], args.logdir)
-# ffmpeg -start_number 0 -i %d.png -c:v libx264 -pix_fmt yuv420p -r 30 sample.mp4
+	# list of weights of all balls
+	# m_list = [(i+1)*2 for i in range(n)]
+	m_list = [10, 1, 1]
+
+	# r_list = [args.radius] * n   
+	# m_list = [1] * n
+
+	def gen_train_data():      
+		print("Generating training data...")
+
+		dat = empty((N), dtype=object)
+		for i in range(N):
+			dat[i] = bounce_vec(res=res, n=n, T=T)
+		data = {}
+		data['Data'] = dat
+		scipy.io.savemat('{}_training_data.mat'.format(args.data_name), data)
+		return data
+
+
+	def gen_test_data():
+		print("Generating test data...")
+
+		# testing data size
+		N = args.N // 20
+
+		dat = empty((N), dtype=object)
+		for i in range(N):
+			dat[i] = bounce_vec(res=res, n=n, T=T)
+		data = {}
+		data['Data'] = dat
+		scipy.io.savemat('{}_testing_data.mat'.format(args.data_name), data)
+		return data
+
+
+	def gen_test_video():
+		print("Generating test video sequence...")
+		sample = bounce_vec(res=res, n=n, T=T)
+
+		# show one video
+		show_sample(sample, args.log_dir)
