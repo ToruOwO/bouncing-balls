@@ -7,6 +7,7 @@ import argparse
 import _pickle as pickle
 import pdb
 
+import h5py
 import matplotlib
 import scipy.io
 from numpy import *
@@ -210,9 +211,20 @@ if __name__ == "__main__":
         dat = empty((N), dtype=object)
         for i in range(N):
             dat[i] = bounce_vec(res=res, n=n, T=T)
-        data = {}
-        data['Data'] = dat
-        scipy.io.savemat('{}_training_data.mat'.format(args.data_name), data)
+
+        # save as h5py
+        with h5py.File('{}_training_data.h5'.format(args.data_name), 'w') as hf:
+            hf.create_dataset('{}_training_data'.format(args.data_name), data=dat)
+
+        try:
+            # save as mat
+            data = {}
+            data['Data'] = dat
+            scipy.io.savemat('{}_training_data.mat'.format(args.data_name), data)
+        except:
+            # file might be too large to be saved
+            pass
+
         return data
 
 
@@ -225,9 +237,19 @@ if __name__ == "__main__":
         dat = empty((N), dtype=object)
         for i in range(N):
             dat[i] = bounce_vec(res=res, n=n, T=T)
-        data = {}
-        data['Data'] = dat
-        scipy.io.savemat('{}_testing_data.mat'.format(args.data_name), data)
+
+        # save as h5py
+        with h5py.File('{}_testing_data.h5'.format(args.data_name), 'w') as hf:
+            hf.create_dataset('{}_testing_data'.format(args.data_name), data=dat)
+
+        # save as mat
+        try:
+            data = {}
+            data['Data'] = dat
+            scipy.io.savemat('{}_testing_data.mat'.format(args.data_name), data)
+        except:
+            pass
+
         return data
 
 
