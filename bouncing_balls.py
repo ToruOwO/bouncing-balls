@@ -155,13 +155,13 @@ def bounce_vec(res, n=2, T=128):
 
 def show_sample(V, logdir, length, animate=True):
     T = len(V)
-    res = int(sqrt(shape(V)[1]))
+    res = shape(V)[1]
 
     images = []
 
     # save static frames as PNG images
     for t in range(length):
-        plt.imshow(V[t].reshape(res, res), cmap=matplotlib.cm.Greys_r)
+        plt.imshow(V[t], cmap=matplotlib.cm.Greys_r)
         # Save it
         fname = logdir + '/' + str(t) + '.png'
         plt.savefig(fname)
