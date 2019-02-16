@@ -150,7 +150,7 @@ def bounce_mat(res, n=2, T=128):
 def bounce_vec(res, n=2, T=128):
     x = bounce_n(T, n);
     V = matricize(x, res)
-    return V.reshape(T, res ** 2)
+    return V
 
 
 def show_sample(V, logdir, length, animate=True):
@@ -184,8 +184,8 @@ if __name__ == "__main__":
     parser.add_argument('--num_balls', type=int, default=3)
     parser.add_argument('--radius', '-r', type=float, default=1.2, help='mean radius of bouncing balls')
     parser.add_argument('--resolution', '-res', type=int, default=64, help='resolution')
-    parser.add_argument('-T', type=int, default=100, help='video sequence length')
-    parser.add_argument('-N', type=int, default=4000, help='number of data samples')
+    parser.add_argument('-T', type=int, default=51, help='video sequence length')
+    parser.add_argument('-N', type=int, default=1000, help='number of data samples')
     parser.add_argument('--sample_length', type=int, default=50, help='length of test video')
     parser.add_argument('--test', default=False, action='store_true', help='run test script only if True')
 
@@ -208,24 +208,13 @@ if __name__ == "__main__":
     def gen_train_data():
         print("Generating training data...")
 
-        dat = empty((N), dtype=object)
+        dat = empty((N, T, res, res))
         for i in range(N):
             dat[i] = bounce_vec(res=res, n=n, T=T)
 
         # save as h5py
         with h5py.File('{}_training_data.h5'.format(args.data_name), 'w') as hf:
             hf.create_dataset('{}_training_data'.format(args.data_name), data=dat)
-
-        try:
-            # save as mat
-            data = {}
-            data['Data'] = dat
-            scipy.io.savemat('{}_training_data.mat'.format(args.data_name), data)
-        except:
-            # file might be too large to be saved
-            pass
-
-        return data
 
 
     def gen_test_data():
@@ -234,23 +223,13 @@ if __name__ == "__main__":
         # testing data size
         N = args.N // 20
 
-        dat = empty((N), dtype=object)
+        dat = empty((N, T, res, res))
         for i in range(N):
             dat[i] = bounce_vec(res=res, n=n, T=T)
 
         # save as h5py
         with h5py.File('{}_testing_data.h5'.format(args.data_name), 'w') as hf:
             hf.create_dataset('{}_testing_data'.format(args.data_name), data=dat)
-
-        # save as mat
-        try:
-            data = {}
-            data['Data'] = dat
-            scipy.io.savemat('{}_testing_data.mat'.format(args.data_name), data)
-        except:
-            pass
-
-        return data
 
 
     def gen_test_video():
