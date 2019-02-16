@@ -205,16 +205,30 @@ if __name__ == "__main__":
     m_list = [1, 10, 50]
 
 
-    def gen_train_data():
-        print("Generating training data...")
+    def gen_data():
+        print("Generating training, validation and test data...")
 
-        dat = empty((N, T, res, res))
+        train = empty((N, T, res, res))
+        valid = empty((N//5, T, res, res))
+        test = empty((N//5, T, res, res))
+
         for i in range(N):
-            dat[i] = bounce_vec(res=res, n=n, T=T)
+            train[i] = bounce_vec(res=res, n=n, T=T)
+
+        for i in range(N//5):
+            valid[i] = bounce_vec(res=res, n=n, T=T)
+            test[i] = bounce_vec(res=res, n=n, T=T)
 
         # save as h5py
-        with h5py.File('{}_training_data.h5'.format(args.data_name), 'w') as hf:
-            hf.create_dataset('{}_training_data'.format(args.data_name), data=dat)
+        with h5py.File('{}_data.h5'.format(args.data_name), 'w') as hf:
+            t = hf.create_group("training")
+            t.create_dataset("features", (N, T, res, res, 1), data=train)
+
+            t = hf.create_group("validation")
+            t.create_dataset("features", (N, T, res, res, 1), data=valid)
+
+            t = hf.create_group("test")
+            t.create_dataset("features", (N, T, res, res, 1), data=test)
 
 
     def gen_test_data():
@@ -229,7 +243,8 @@ if __name__ == "__main__":
 
         # save as h5py
         with h5py.File('{}_testing_data.h5'.format(args.data_name), 'w') as hf:
-            hf.create_dataset('{}_testing_data'.format(args.data_name), data=dat)
+            group = hf.create_group("test")
+            group.create_dataset("features", (T, N, res, res, 1), data=dat)
 
 
     def gen_test_video():
@@ -241,7 +256,8 @@ if __name__ == "__main__":
 
 
     if args.test:
+        gen_test_data()
         gen_test_video()
     else:
-        gen_train_data()
-        gen_test_data()
+        gen_data()
+
