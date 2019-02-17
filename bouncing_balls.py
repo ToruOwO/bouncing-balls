@@ -122,13 +122,13 @@ def bounce_n(T=128, n=2):
 
 
 def ar(x, y, z):
-    return z / 2 + arange(x, y, z, dtype='float')
+    return z / 2 + arange(x, y, z, dtype=float)
 
 
 def matricize(X, res):
     T, n = shape(X)[:2]
 
-    A = zeros((T, res, res), dtype='float')
+    A = zeros((T, res, res), dtype=float)
 
     # create a rectangular grid out of an array of x values and an array of y values.
     [I, J] = meshgrid(ar(0, 1, 1. / res) * SIZE, ar(0, 1, 1. / res) * SIZE)
@@ -150,7 +150,7 @@ def matricize_groups(X, res):
     [I, J] = meshgrid(ar(0, 1, 1. / res) * SIZE, ar(0, 1, 1. / res) * SIZE)
 
     for i in range(n):
-        a = zeros((T, res, res), dtype='float')
+        a = zeros((T, res, res), dtype=float)
         for t in range(T):
             a[t] += exp(-(((I - X[t, i, 0]) ** 2 + (J - X[t, i, 1]) ** 2) / (r_list[i] ** 2)) ** 4)
 
@@ -239,8 +239,8 @@ if __name__ == "__main__":
                 features[i], groups[i] = bounce_vec(res=res, n=n, T=T)
 
             # note that data is implicitly reshaped here
-            grp.create_dataset("features", (T, usage, res, res, 1), data=features)
-            grp.create_dataset("groups", (T, usage, res, res, 1), data=groups)
+            grp.create_dataset("features", (T, n_usage, res, res, 1), data=features)
+            grp.create_dataset("groups", (T, n_usage, res, res, 1), data=groups)
 
         hf.close()
 
