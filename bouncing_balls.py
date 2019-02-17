@@ -126,7 +126,7 @@ def ar(x, y, z):
 
 
 def matricize(X, res):
-    T, n = shape(X)[0:2]
+    T, n = shape(X)[:2]
 
     A = zeros((T, res, res), dtype='float')
 
@@ -137,23 +137,35 @@ def matricize(X, res):
         for i in range(n):
             A[t] += exp(-(((I - X[t, i, 0]) ** 2 + (J - X[t, i, 1]) ** 2) / (r_list[i] ** 2)) ** 4)
 
-        A[t][A[t] > 1] = 1
-    return A
+    return (A > 0.05).astype(int)
 
 
-def bounce_mat(res, n=2, T=128):
-    x = bounce_n(T, n);
-    A = matricize(x, res)
-    return A
+def matricize_groups(X, res):
+    # shape of X is (T, n, 2)
+    T, n = shape(X)[:2]
+
+    groups = zeros((T, res, res), dtype=int)
+
+    # create a rectangular grid out of an array of x values and an array of y values.
+    [I, J] = meshgrid(ar(0, 1, 1. / res) * SIZE, ar(0, 1, 1. / res) * SIZE)
+
+    for i in range(n):
+        a = zeros((T, res, res), dtype='float')
+        for t in range(T):
+            a[t] += exp(-(((I - X[t, i, 0]) ** 2 + (J - X[t, i, 1]) ** 2) / (r_list[i] ** 2)) ** 4)
+
+        groups[a > 0.05] = i+1
+    return groups
 
 
 def bounce_vec(res, n=2, T=128):
     x = bounce_n(T, n);
-    V = matricize(x, res)
-    return V
+    features = matricize(x, res)
+    groups = matricize_groups(x, res)
+    return (features, groups)
 
 
-def show_sample(V, logdir, length, animate=True):
+def show_sample(V, logdir, length, animate=True, name='data'):
     T = len(V)
     res = shape(V)[1]
 
@@ -170,7 +182,7 @@ def show_sample(V, logdir, length, animate=True):
 
     # generate GIF from the image files
     if animate:
-        gif_name = 'sample_l{}.gif'.format(length)
+        gif_name = '{}_sample_l{}.gif'.format(name, length)
         images[0].save(gif_name, format='GIF', append_images=images[1:], save_all=True, duration=100, loop=0)
 
 
@@ -208,27 +220,29 @@ if __name__ == "__main__":
     def gen_data():
         print("Generating training, validation and test data...")
 
-        train = empty((N, T, res, res))
-        valid = empty((N//5, T, res, res))
-        test = empty((N//5, T, res, res))
-
-        for i in range(N):
-            train[i] = bounce_vec(res=res, n=n, T=T)
-
-        for i in range(N//5):
-            valid[i] = bounce_vec(res=res, n=n, T=T)
-            test[i] = bounce_vec(res=res, n=n, T=T)
+        shapes = {
+            "training": (N, T, res, res, 1),
+            "validation": (N//5, T, res, res, 1),
+            "test": (N//5, T, res, res, 1)
+        }
 
         # save as h5py
-        with h5py.File('{}_data.h5'.format(args.data_name), 'w') as hf:
-            t = hf.create_group("training")
-            t.create_dataset("features", (N, T, res, res, 1), data=train)
+        hf = h5py.File('{}.h5'.format(args.data_name), 'w')
 
-            t = hf.create_group("validation")
-            t.create_dataset("features", (N, T, res, res, 1), data=valid)
+        for usage in ["training", "validation", "test"]:
+            grp = hf.create_group(usage)
 
-            t = hf.create_group("test")
-            t.create_dataset("features", (N, T, res, res, 1), data=test)
+            features, groups = empty(shapes[usage][:-1]), empty(shapes[usage][:-1])
+
+            n_usage = shapes[usage][0]
+            for i in range(n_usage):
+                features[i], groups[i] = bounce_vec(res=res, n=n, T=T)
+
+            # note that data is implicitly reshaped here
+            grp.create_dataset("features", (T, usage, res, res, 1), data=features)
+            grp.create_dataset("groups", (T, usage, res, res, 1), data=groups)
+
+        hf.close()
 
 
     def gen_test_data():
@@ -237,22 +251,24 @@ if __name__ == "__main__":
         # testing data size
         N = args.N // 20
 
-        dat = empty((N, T, res, res))
+        features, groups = empty((N, T, res, res)), empty((N, T, res, res))
         for i in range(N):
-            dat[i] = bounce_vec(res=res, n=n, T=T)
+            features[i], groups[i] = bounce_vec(res=res, n=n, T=T)
 
         # save as h5py
-        with h5py.File('{}_testing_data.h5'.format(args.data_name), 'w') as hf:
-            group = hf.create_group("test")
-            group.create_dataset("features", (T, N, res, res, 1), data=dat)
+        with h5py.File('{}_test.h5'.format(args.data_name), 'w') as hf:
+            grp = hf.create_group("test")
+            grp.create_dataset("features", (T, N, res, res, 1), data=features)
+            grp.create_dataset("groups", (T, N, res, res, 1), data=groups)
 
 
     def gen_test_video():
         print("Generating test video sequence...")
-        sample = bounce_vec(res=res, n=n, T=T)
+        fs, gs = bounce_vec(res=res, n=n, T=T)
 
         # show one video
-        show_sample(sample, args.log_dir, args.sample_length)
+        show_sample(fs, args.log_dir, args.sample_length, name='features')
+        show_sample(gs, args.log_dir, args.sample_length, name='groups')
 
 
     if args.test:
