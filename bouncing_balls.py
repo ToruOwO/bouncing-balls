@@ -227,7 +227,7 @@ if __name__ == "__main__":
         }
 
         # save as h5py
-        hf = h5py.File('{}.h5'.format(args.data_name), 'w')
+        hf = h5py.File('{}.h5'.format(args.data_name), 'a')
 
         for usage in ["training", "validation", "test"]:
             grp = hf.create_group(usage)
